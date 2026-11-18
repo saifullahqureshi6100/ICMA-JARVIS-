@@ -30,7 +30,7 @@ class MainActivity : Activity(), TextToSpeech.OnInitListener {
     private lateinit var phoneController: JarvisPhoneController
     private var tts: TextToSpeech? = null
 
-    private val commandCenterUrl = "https://study-jarvis-icma.ai.studio"
+    private val commandCenterUrl = "https://ais-pre-tgcxqe53ouzy622wo2qp27-120229870269.asia-northeast1.run.app"
     private val speechReqCode = 202
 
     @SuppressLint("SetJavaScriptEnabled")
@@ -38,6 +38,11 @@ class MainActivity : Activity(), TextToSpeech.OnInitListener {
         super.onCreate(savedInstanceState)
         phoneController = JarvisPhoneController(this)
         tts = TextToSpeech(this, this)
+
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O_MR1) {
+            setShowWhenLocked(true)
+            setTurnScreenOn(true)
+        }
 
         requestRuntimePermissions()
 
@@ -51,6 +56,17 @@ class MainActivity : Activity(), TextToSpeech.OnInitListener {
             loadUrl(commandCenterUrl)
         }
         setContentView(webView)
+
+        if (intent.getBooleanExtra("wake_auto_listen", false)) {
+            webView.postDelayed({ startNativeVoiceCapture() }, 700)
+        }
+    }
+
+    override fun onNewIntent(intent: Intent?) {
+        super.onNewIntent(intent)
+        if (intent?.getBooleanExtra("wake_auto_listen", false) == true) {
+            startNativeVoiceCapture()
+        }
     }
 
     private fun requestRuntimePermissions() {
@@ -137,6 +153,37 @@ class MainActivity : Activity(), TextToSpeech.OnInitListener {
         }
 
         @JavascriptInterface
+        fun getSocialMessages(platformFilter: String): String {
+            return JarvisWhatsAppListenerService.getMessagesJson(applicationContext, platformFilter)
+        }
+
+        @JavascriptInterface
+        fun sendDirectNotificationReply(notifId: String, replyText: String): Boolean {
+            return JarvisWhatsAppListenerService.sendDirectReply(applicationContext, notifId, replyText)
+        }
+
+        @JavascriptInterface
+        fun setWakeWordEnabled(enabled: Boolean): String {
+            val svcIntent = Intent(applicationContext, JarvisWakeWordService::class.java)
+            if (enabled) {
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                    applicationContext.startForegroundService(svcIntent)
+                } else {
+                    applicationContext.startService(svcIntent)
+                }
+                return "Wake word 'Wake up Jarvis' background service started."
+            } else {
+                applicationContext.stopService(svcIntent)
+                return "Wake word background service stopped."
+            }
+        }
+
+        @JavascriptInterface
+        fun isWakeWordRunning(): Boolean {
+            return JarvisWakeWordService.isRunning
+        }
+
+        @JavascriptInterface
         fun clearWhatsAppMessages() {
             JarvisWhatsAppListenerService.clearMessages(applicationContext)
         }
@@ -169,7 +216,20 @@ class MainActivity : Activity(), TextToSpeech.OnInitListener {
 
     override fun onInit(status: Int) {
         if (status == TextToSpeech.SUCCESS) {
-            tts?.language = Locale.US
+            tts?.language = Locale.UK
+            tts?.setPitch(0.82f)
+            tts?.setSpeechRate(0.98f)
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
+                try {
+                    val maleVoice = tts?.voices?.firstOrNull { v ->
+                        val n = v.name.lowercase(Locale.US)
+                        v.locale.language == "en" &&
+                            (n.contains("male") || n.contains("-m-") || n.contains("iom") || n.contains("rjs") || n.contains("gba")) &&
+                            !n.contains("female")
+                    }
+                    if (maleVoice != null) tts?.voice = maleVoice
+                } catch (_: Exception) {}
+            }
         }
     }
 

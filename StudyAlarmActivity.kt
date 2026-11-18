@@ -156,7 +156,20 @@ class StudyAlarmActivity : Activity(), TextToSpeech.OnInitListener {
 
     override fun onInit(status: Int) {
         if (status == TextToSpeech.SUCCESS) {
-            tts?.language = Locale.US
+            tts?.language = Locale.UK
+            tts?.setPitch(0.82f)
+            tts?.setSpeechRate(0.98f)
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
+                try {
+                    val maleVoice = tts?.voices?.firstOrNull { v ->
+                        val n = v.name.lowercase(Locale.US)
+                        v.locale.language == "en" &&
+                            (n.contains("male") || n.contains("-m-") || n.contains("iom") || n.contains("rjs") || n.contains("gba")) &&
+                            !n.contains("female")
+                    }
+                    if (maleVoice != null) tts?.voice = maleVoice
+                } catch (_: Exception) {}
+            }
             tts?.speak(
                 "Incoming study call from Jarvis. Saif, it is time for $studyTopic.",
                 TextToSpeech.QUEUE_FLUSH,

@@ -12,6 +12,7 @@ import android.net.Uri
 import android.os.Build
 import android.provider.AlarmClock
 import android.provider.Settings
+import android.view.KeyEvent
 import org.json.JSONObject
 import java.util.Calendar
 
@@ -20,6 +21,12 @@ class JarvisPhoneController(private val context: Context) {
     private val appPackages = mapOf(
         "youtube" to "com.google.android.youtube",
         "whatsapp" to "com.whatsapp",
+        "instagram" to "com.instagram.android",
+        "facebook" to "com.facebook.katana",
+        "messenger" to "com.facebook.orca",
+        "telegram" to "org.telegram.messenger",
+        "linkedin" to "com.linkedin.android",
+        "x" to "com.twitter.android",
         "chrome" to "com.android.chrome",
         "gmail" to "com.google.android.gm",
         "maps" to "com.google.android.apps.maps",
@@ -57,8 +64,15 @@ class JarvisPhoneController(private val context: Context) {
             "toggle_flashlight" -> toggleFlashlight(target.equals("on", ignoreCase = true))
             "set_dnd" -> setDoNotDisturb(target.equals("on", ignoreCase = true))
             "set_volume" -> setVolumeLevel(target)
+            "media_control" -> controlMediaPlayback(target)
+            "wifi_settings" -> launchIntent(Intent(Settings.ACTION_WIFI_SETTINGS))
+            "bluetooth_settings" -> launchIntent(Intent(Settings.ACTION_BLUETOOTH_SETTINGS))
             "phone_call" -> dialPhone(target)
             "send_whatsapp" -> openWhatsApp(target, textArg)
+            "reply_social" -> {
+                val sentDirectly = JarvisWhatsAppListenerService.sendDirectReplyBySender(context, target, textArg)
+                if (!sentDirectly) openWhatsApp("", textArg)
+            }
             "nav_action" -> performAccessibilityNav(target)
         }
         return spoken
@@ -124,12 +138,28 @@ class JarvisPhoneController(private val context: Context) {
             launchIntent(Intent(android.provider.MediaStore.ACTION_IMAGE_CAPTURE))
             return
         }
+        if (key == "phone") {
+            launchIntent(Intent(Intent.ACTION_DIAL))
+            return
+        }
         val pkg = appPackages[key] ?: return
         val launch = context.packageManager.getLaunchIntentForPackage(pkg)
         if (launch != null) {
             launch.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
             context.startActivity(launch)
         }
+    }
+
+    private fun controlMediaPlayback(cmd: String) {
+        val audio = context.getSystemService(Context.AUDIO_SERVICE) as AudioManager
+        val keyCode = when (cmd.lowercase()) {
+            "next" -> KeyEvent.KEYCODE_MEDIA_NEXT
+            "previous" -> KeyEvent.KEYCODE_MEDIA_PREVIOUS
+            "stop" -> KeyEvent.KEYCODE_MEDIA_STOP
+            else -> KeyEvent.KEYCODE_MEDIA_PLAY_PAUSE
+        }
+        audio.dispatchMediaKeyEvent(KeyEvent(KeyEvent.ACTION_DOWN, keyCode))
+        audio.dispatchMediaKeyEvent(KeyEvent(KeyEvent.ACTION_UP, keyCode))
     }
 
     private fun searchYouTube(query: String) {
@@ -198,6 +228,8 @@ class JarvisPhoneController(private val context: Context) {
         val clean = number.replace(Regex("[^0-9+]"), "")
         if (clean.isNotEmpty()) {
             launchIntent(Intent(Intent.ACTION_DIAL, Uri.parse("tel:$clean")))
+        } else {
+            launchIntent(Intent(Intent.ACTION_DIAL))
         }
     }
 
@@ -224,6 +256,9 @@ class JarvisPhoneController(private val context: Context) {
             "notifications" -> svc.performGlobalAction(AccessibilityService.GLOBAL_ACTION_NOTIFICATIONS)
             "lock_screen" -> if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
                 svc.performGlobalAction(AccessibilityService.GLOBAL_ACTION_LOCK_SCREEN)
+            }
+            "screenshot" -> if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+                svc.performGlobalAction(AccessibilityService.GLOBAL_ACTION_TAKE_SCREENSHOT)
             }
         }
     }
