@@ -1,0 +1,62 @@
+
+name: Build ICMA Jarvis APK
+
+on:
+  push:
+    branches: ["main"]
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Download repository
+        uses: actions/checkout@v4
+
+      - name: Check and extract Android project
+        run: |
+          if [ ! -f "icma-jarvis-repo.zip" ]; then
+            echo "Android project ZIP not found!"
+            exit 1
+          fi
+          unzip -q icma-jarvis-repo.zip -d extracted
+          echo "Files inside ZIP:"
+          find extracted -maxdepth 5 -type f | head -100
+
+          PROJECT_FILE=$(find extracted -type f \( -name settings.gradle -o -name settings.gradle.kts \) | head -1)
+
+          if [ -z "$PROJECT_FILE" ]; then
+            echo "No Android Gradle project found in ZIP."
+            exit 1
+          fi
+
+          echo "ANDROID_PROJECT_DIR=$(dirname "$PROJECT_FILE")" >> "$GITHUB_ENV"
+
+      - name: Set up Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - name: Install Gradle
+        run: |
+          wget -q https://services.gradle.org/distributions/gradle-8.9-bin.zip
+          unzip -q gradle-8.9-bin.zip
+
+      - name: Build Android APK
+        run: |
+          cd "$ANDROID_PROJECT_DIR"
+          if [ -f "./gradlew" ]; then
+            chmod +x ./gradlew
+            ./gradlew assembleDebug
+          else
+            "$GITHUB_WORKSPACE/gradle-8.9/bin/gradle" assembleDebug
+          fi
+
+      - name: Upload APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: ICMA-Jarvis-APK
+          path: "**/build/outputs/apk/debug/*.apk"
+          if-no-files-found: error
