@@ -20,9 +20,8 @@ jobs:
             echo "Android project ZIP not found!"
             exit 1
           fi
+
           unzip -q icma-jarvis-repo.zip -d extracted
-          echo "Files inside ZIP:"
-          find extracted -maxdepth 5 -type f | head -100
 
           PROJECT_FILE=$(find extracted -type f \( -name settings.gradle -o -name settings.gradle.kts \) | head -1)
 
@@ -43,6 +42,12 @@ jobs:
         run: |
           wget -q https://services.gradle.org/distributions/gradle-8.9-bin.zip
           unzip -q gradle-8.9-bin.zip
+
+      - name: Enable AndroidX
+        run: |
+          touch "$ANDROID_PROJECT_DIR/gradle.properties"
+          echo "android.useAndroidX=true" >> "$ANDROID_PROJECT_DIR/gradle.properties"
+          echo "android.enableJetifier=true" >> "$ANDROID_PROJECT_DIR/gradle.properties"
 
       - name: Build Android APK
         run: |
